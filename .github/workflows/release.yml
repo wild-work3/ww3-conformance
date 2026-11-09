@@ -61,7 +61,15 @@ jobs:
           tag="${{ github.event.inputs.tag }}"
           [ -n "$tag" ] || tag="${GITHUB_REF_NAME}"
           case "$tag" in v*) ;; *) tag="v$tag" ;; esac
-          # release 不存在则创建；已存在则直接传（幂等，允许重跑补传）
-          gh release view "$tag" >/dev/null 2>&1 || \
-            gh release create "$tag" --title "$tag" --notes "ww3-conformance $tag"
+          # 矩阵里 6 个 job 并发跑，会同时发现 release 不存在并同时 create：
+          # 只有一个成功，其余拿到 `HTTP 422: Release.tag_name already exists`（实测踩过）。
+          # 所以 create 失败不算错，只要事后 release 真的存在即可（否则才 fail closed）。
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --notes "ww3-conformance $tag" || true
+            for _ in 1 2 3 4 5; do
+              gh release view "$tag" >/dev/null 2>&1 && break
+              sleep 2
+            done
+          fi
+          gh release view "$tag" >/dev/null 2>&1 || { echo "release $tag 不可用"; exit 1; }
           gh release upload "$tag" "$ASSET" --clobber
