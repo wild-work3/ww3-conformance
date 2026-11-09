@@ -1,0 +1,67 @@
+name: release
+
+# 发布可与 CI 解耦的预编译二进制：插件仓的 workflow 直接下载它们做自检，
+# 不需要在本机装 Go（用户 m0XXXX：先只验 Windows，流程闭环后再推广全平台）。
+#
+# 资产命名固定为 `ww3-conformance-<os>-<arch>[.exe]`，
+# 下载端拼 `releases/latest/download/<名字>` 即可，不依赖 tag 命名。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布/补传资产的 tag（缺省用当前 ref 的 tag 或 v0.0.0-dev）'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: darwin,  goarch: amd64 }
+          - { goos: darwin,  goarch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: 构建 ${{ matrix.goos }}-${{ matrix.goarch }}
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          out=ww3-conformance-${{ matrix.goos }}-${{ matrix.goarch }}
+          [ "${GOOS}" = windows ] && out="${out}.exe"
+          go build -trimpath -ldflags='-s -w' -o "$out" ./cmd/ww3-conformance
+          # 交叉编译产物在 ubuntu 上跑不了 windows/darwin 的，只验大小非空
+          ls -l "$out"
+          echo "ASSET=$out" >> "$GITHUB_ENV"
+
+      - name: 上传到 release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag }}"
+          [ -n "$tag" ] || tag="${GITHUB_REF_NAME}"
+          case "$tag" in v*) ;; *) tag="v$tag" ;; esac
+          # release 不存在则创建；已存在则直接传（幂等，允许重跑补传）
+          gh release view "$tag" >/dev/null 2>&1 || \
+            gh release create "$tag" --title "$tag" --notes "ww3-conformance $tag"
+          gh release upload "$tag" "$ASSET" --clobber
