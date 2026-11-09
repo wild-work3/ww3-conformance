@@ -1,7 +1,7 @@
 name: release
 
 # 发布可与 CI 解耦的预编译二进制：插件仓的 workflow 直接下载它们做自检，
-# 不需要在本机装 Go（用户 m0XXXX：先只验 Windows，流程闭环后再推广全平台）。
+# 不需要在本机装 Go（m03447 定案：先只验 Windows，流程闭环后再推广全平台）。
 #
 # 资产命名固定为 `ww3-conformance-<os>-<arch>[.exe]`，
 # 下载端拼 `releases/latest/download/<名字>` 即可，不依赖 tag 命名。
