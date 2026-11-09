@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "id": "lobsterai",
+  "kind": "channel",
+  "model": "lobsterai/mock-flash",
+  "live_model": "lobsterai/deepseek-v3",
+  "auth": {
+    "accessToken": "mock-lobster-token",
+    "expiresAt": 2051222400,
+    "nickname": "lobsterai-mock",
+    "refreshToken": "mock-lobster-rt",
+    "uid": "lobsterai-mock"
+  },
+  "account": {
+    "nickname": "lobsterai-mock",
+    "uid": "lobsterai-mock"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": ".*(models|model/list|model_catalog|recommended-models|models/available)$",
+      "kind": "json",
+      "body": "{\"data\":[{\"id\":\"mock-flash\",\"name\":\"Mock Flash\"},\n\t\t\t\t{\"id\":\"mock-pro\",\"name\":\"Mock Pro\"}],\"models\":[{\"id\":\"mock-flash\",\"name\":\"Mock Flash\"}],\n\t\t\t\t\"free\":[{\"id\":\"mock-flash\",\"name\":\"Mock Flash\"}]}"
+    },
+    {
+      "method": "POST",
+      "path": ".*chat/completions$",
+      "kind": "sse_openai",
+      "text": "你好，我是 mock 上游的回复。",
+      "chunks": 3,
+      "usage": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 4,
+        "completion_tokens": 7,
+        "prompt_tokens": 13
+      }
+    },
+    {
+      "method": "GET",
+      "path": ".*(balance|points|quota|wallets|resource|profile-summary|setting_info).*",
+      "kind": "json",
+      "body": "{\"balance\":100,\"data\":{\"balance\":100},\"total\":100,\"used\":0,\"remaining\":100}"
+    },
+    {
+      "method": "POST",
+      "path": ".*(checkin|check_in|daily).*",
+      "kind": "json",
+      "body": "{\"ok\":true,\"success\":true,\"data\":{\"ok\":true}}"
+    },
+    {
+      "method": "POST",
+      "path": ".*(refresh|token).*",
+      "kind": "json",
+      "body": "{\"access_token\":\"mock-access-2\",\"accessToken\":\"mock-access-2\",\"expires_in\":7200,\"expiresIn\":7200}"
+    }
+  ],
+  "auth_prefixes": [
+    "lobsterai"
+  ],
+  "notes": [
+    "loopback_callback 范式；对话走 /api/proxy/v1/chat/completions"
+  ],
+  "exported_at": "2026-11-08"
+}

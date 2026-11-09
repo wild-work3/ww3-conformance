@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "id": "minimax",
+  "kind": "channel",
+  "model": "minimax/MiniMax-M3.1-Flash-Preview",
+  "live_model": "minimax/MiniMax-M3.1-Flash-Preview",
+  "auth": {
+    "accessToken": "mock-mm-token",
+    "expiresAt": 2051222400,
+    "nickname": "minimax-mock",
+    "refreshToken": "mock-mm-rt",
+    "uid": "minimax-mock"
+  },
+  "account": {
+    "nickname": "minimax-mock",
+    "uid": "minimax-mock"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": ".*/mavis/api/v1/models.*",
+      "kind": "json",
+      "body": "{\"data\":[{\"id\":\"mock-flash\",\"name\":\"Mock Flash\"}],\"models\":[{\"id\":\"mock-flash\"}]}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/llm/v1/messages.*",
+      "kind": "sse_anthropic",
+      "text": "你好，我是 minimax mock 上游。",
+      "chunks": 2,
+      "usage": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 4,
+        "completion_tokens": 9,
+        "prompt_tokens": 12
+      }
+    },
+    {
+      "method": "GET",
+      "path": ".*/signin/status.*",
+      "kind": "json",
+      "body": "{\"signed\":false}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/signin/claim.*",
+      "kind": "json",
+      "body": "{\"ok\":true}"
+    }
+  ],
+  "auth_prefixes": [
+    "minimax"
+  ],
+  "notes": [
+    "上游是 Anthropic Messages 协议（出站 OpenAI→Anthropic、入站 SSE→统一事件）"
+  ],
+  "exported_at": "2026-11-08"
+}

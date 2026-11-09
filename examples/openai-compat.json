@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "model": "mock-flash",
+  "extra_config": {
+    "api_key": "sk-mock-1234567890"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/models",
+      "kind": "json",
+      "body": "{\"data\":[{\"id\":\"mock-flash\",\"name\":\"Mock Flash\",\"context_length\":128000}]}"
+    },
+    {
+      "method": "POST",
+      "path": "/chat/completions",
+      "kind": "sse_openai",
+      "text": "你好，我是 mock 上游。",
+      "usage": {
+        "prompt_tokens": 100,
+        "completion_tokens": 20,
+        "cached_tokens": 40
+      }
+    }
+  ],
+  "notes": [
+    "标准 OpenAI 兼容渠道（API Key 型，无需登录）的最小描述文件范例"
+  ]
+}

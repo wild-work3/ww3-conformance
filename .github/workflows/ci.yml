@@ -1,0 +1,75 @@
+name: ci
+
+# 本仓 CI 只保证「工具自身可用」：
+#   1. 能编译、vet 干净、单测通过、零第三方依赖
+#   2. CLI 的用法错误按契约返回退出码 2
+#   3. 自带 presets/ 与 examples/ 的数据格式自洽
+# 不代任何插件跑准入（W3-53 交付边界）——那属各插件仓自己的 workflow。
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: build
+        run: go build ./...
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test ./...
+      - name: 零第三方依赖
+        run: |
+          out=$(go list -m all)
+          echo "$out"
+          [ "$(echo "$out" | wc -l)" = "1" ] || { echo "::error::出现了第三方依赖"; exit 1; }
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: 构建
+        run: go build -o /tmp/ww3-conformance ./cmd/ww3-conformance
+      # 用法错误必须返回退出码 2（契约：0=全 PASS/WARN，1=有 FAIL，2=用法错误）
+      - name: 用法错误退出码
+        run: |
+          set +e
+          /tmp/ww3-conformance --exe foo --dist ../dist --out /tmp/rep
+          [ $? = 2 ] || { echo "::error::--exe 与 --dist 同时给出应退出码 2"; exit 1; }
+          /tmp/ww3-conformance --dist ../dist -- --foo
+          [ $? = 2 ] || { echo "::error::--dist 配 -- 应退出码 2"; exit 1; }
+          /tmp/ww3-conformance --mode bogus
+          [ $? = 2 ] || { echo "::error::非法 --mode 应退出码 2"; exit 1; }
+          echo OK
+      # presets/ 与 examples/ 都必须能被 LoadFile 解析（数据格式自洽，
+      # 不涉及任何插件 exe——这里只验 JSON 形状）。
+      # 退出码约定：2 = 用法/描述文件非法，0/1 = 格式没问题（1 只是 /bin/true 不是插件而必然 FAIL）。
+      - name: 描述文件与预设格式
+        run: |
+          for f in presets/*.json examples/*.json; do
+            /tmp/ww3-conformance --descriptor "$f" --exe /bin/true --out /tmp/rep >/dev/null 2>&1
+            rc=$?
+            [ $rc = 2 ] && { echo "::error::$f 解析失败（退出码 2）"; exit 1; }
+          done
+          echo "全部 $(ls presets/*.json examples/*.json | wc -l) 份描述文件解析通过"
+      # 反证：坏描述文件必须真的被判成 2，避免上一步恒过
+      - name: 坏描述文件应退出 2
+        run: |
+          set +e
+          echo '{"schema":9,"id":"x"}' > /tmp/bad.json
+          /tmp/ww3-conformance --descriptor /tmp/bad.json --exe /bin/true --out /tmp/rep >/dev/null 2>&1
+          [ $? = 2 ] || { echo "::error::非法 schema 未被拒绝"; exit 1; }
+          echo OK

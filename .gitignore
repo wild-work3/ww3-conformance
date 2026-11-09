@@ -1,0 +1,6 @@
+# 报告产物（本地跑出来的，不进仓；CI 用 artifact 上传）
+reports/*
+!reports/.gitkeep
+# 本地二进制
+*.exe
+dist/

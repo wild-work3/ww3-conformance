@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "id": "traework",
+  "kind": "channel",
+  "model": "traework/mock-flash",
+  "live_model": "traework/doubao-seed-code",
+  "auth": {
+    "accessToken": "mock-tw-token",
+    "apiHost": "",
+    "deviceId": "mock-d",
+    "domain": "trae.cn",
+    "expiresAt": 2051222400,
+    "machineId": "mock-m",
+    "nickname": "traework-mock",
+    "refreshToken": "mock-tw-rt",
+    "uid": "traework-mock"
+  },
+  "account": {
+    "nickname": "traework-mock",
+    "uid": "traework-mock"
+  },
+  "extra_config": {
+    "variant": "traework"
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": ".*/api/ide/v1/get_detail_param.*",
+      "kind": "json",
+      "body": "{\"config_info_list\":[{\"config_name\":\"mock-flash\",\n\t\t\"context_window\":{\"dev\":128000,\"max\":128000},\n\t\t\"display_config\":{\"display_name\":\"Mock Flash\",\"is_custom_model\":false,\"multimodal\":false}}]}"
+    },
+    {
+      "method": "GET",
+      "path": ".*/api/remote/v1/models.*",
+      "kind": "json",
+      "body": "{\"configs\":[]}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/api/agent/v3/llm_utils_chat.*",
+      "kind": "sse_raw",
+      "body": "event: output\ndata: {\"reasoning_content\":\"让我想想\"}\n\nevent: output\ndata: {\"response\":\"你好，\"}\n\nevent: output\ndata: {\"response\":\"我是 traework mock 上游。\"}\n\nevent: token_usage\ndata: {\"prompt_tokens\":12,\"completion_tokens\":9,\"total_tokens\":21,\"cache_read_input_tokens\":4}\n\nevent: done\ndata: {\"finish_reason\":\"stop\"}\n"
+    },
+    {
+      "method": "GET",
+      "path": ".*/cloudide/api/v3/trae/GetUserInfo.*",
+      "kind": "json",
+      "body": "{\"user\":{\"id\":\"traework-mock\",\"name\":\"traework-mock\"},\"uid\":\"traework-mock\"}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/oauth/ExchangeToken.*",
+      "kind": "json",
+      "body": "{\"access_token\":\"mock-tw-access-2\",\"refresh_token\":\"mock-tw-rt-2\",\"expires_in\":7200,\"expiresAt\":farFuture}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/trae/api/v2/pay/web_user_ent_usage.*",
+      "kind": "json",
+      "body": "{\"usage\":{\"used\":0,\"total\":1000}}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/trae/api/v2/ug/checkin_credits/claim.*",
+      "kind": "json",
+      "body": "{\"ok\":true,\"success\":true,\"code\":0}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/trae/api/v2/ug/checkin_credits/status.*",
+      "kind": "json",
+      "body": "{\"checked_in\":false,\"credits\":100,\"enable\":true,\"code\":0,\"success\":true}"
+    }
+  ],
+  "auth_prefixes": [
+    "trae",
+    "traework"
+  ],
+  "notes": [
+    "SOLO 命名事件流（event: output/token_usage/done），**不输出 [DONE]** 为刻意行为",
+    "loopback_callback 只活在 auth.begin 进程内，实际走 auth.finish 粘贴兜底"
+  ],
+  "exported_at": "2026-11-08"
+}

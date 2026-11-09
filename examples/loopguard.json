@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "id": "loopguard",
+  "kind": "hook",
+  "hook": {
+    "terminate": {
+      "frames": [
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        },
+        {
+          "event": "reasoning.delta",
+          "data": {
+            "text": "这是一行足够长的重复思考内容用来触发死循环检测\n"
+          }
+        }
+      ],
+      "want_kind": "reasoning_loop"
+    }
+  }
+}

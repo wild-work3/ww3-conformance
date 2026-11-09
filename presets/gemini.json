@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "id": "gemini",
+  "kind": "channel",
+  "model": "gemini/gemini-3.8-flash",
+  "live_model": "gemini/gemini-3.8-flash",
+  "auth": {
+    "accessToken": "mock-gemini-token",
+    "expiresAt": 2051222400,
+    "extra": {
+      "cloudaicompanionProject": "proj-mock"
+    },
+    "nickname": "gemini-mock",
+    "refreshToken": "mock-gemini-rt",
+    "uid": "gemini-mock"
+  },
+  "account": {
+    "nickname": "gemini-mock",
+    "uid": "gemini-mock"
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": ".*:loadCodeAssist.*",
+      "kind": "json",
+      "body": "{\"cloudaicompanionProject\":\"proj-mock\",\"currentTier\":{\"id\":\"free-tier\",\"name\":\"Antigravity\"}}"
+    },
+    {
+      "method": "POST",
+      "path": ".*:streamGenerateContent.*",
+      "kind": "sse_raw",
+      "body": "data: {\"response\":{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"你好，\"}],\"role\":\"model\"}}]}}\n\ndata: {\"response\":{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"我是 gemini mock。\"}],\"role\":\"model\"}}]}}\n\ndata: {\"response\":{\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"cachedContentTokenCount\":4,\"candidatesTokenCount\":9,\"promptTokenCount\":12,\"totalTokenCount\":21}}}\n\ndata: [DONE]\n"
+    },
+    {
+      "method": "POST",
+      "path": ".*:generateContent.*",
+      "kind": "json",
+      "body": "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"mock\"}]},\"finishReason\":\"STOP\"}]}"
+    },
+    {
+      "method": "POST",
+      "path": ".*:retrieveUserQuotaSummary.*",
+      "kind": "json",
+      "body": "{\"quota\":{\"remaining\":1000}}"
+    }
+  ],
+  "auth_prefixes": [
+    "gemini"
+  ],
+  "notes": [
+    "v1internal 信封（逐层字母序序列化）；模型严格校验只认 gemini-3.8-flash",
+    "loopback_callback（state 16B hex 强校验、无 PKCE、token 端点必带 client_secret）"
+  ],
+  "exported_at": "2026-11-08"
+}

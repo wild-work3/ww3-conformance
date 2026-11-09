@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "id": "chatgpt-cli",
+  "kind": "channel",
+  "model": "gpt-6-mini",
+  "live_model": "gpt-6-mini",
+  "auth": {
+    "accessToken": "mock-cgpt-token",
+    "accountId": "chatgpt-mock",
+    "cookies": {
+      "__Secure-next-auth.session-token": "mock-session"
+    },
+    "expiresAt": 2051222400,
+    "kind": "web",
+    "userId": "chatgpt-mock"
+  },
+  "account": {
+    "nickname": "chatgpt-mock",
+    "uid": "chatgpt-mock"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "^/$",
+      "kind": "raw",
+      "body": "\u003c!doctype html\u003e\u003chtml\u003e\u003chead\u003e\u003ctitle\u003eChatGPT\u003c/title\u003e\u003cscript src=\"/sentinel/20261030/sdk.js\"\u003e\u003c/script\u003e\u003c/head\u003e\u003cbody data-build=\"mock-build-20261030\"\u003eok\u003c/body\u003e\u003c/html\u003e"
+    },
+    {
+      "method": "POST",
+      "path": ".*/sentinel/chat-requirements/prepare.*",
+      "kind": "json",
+      "body": "{\"prepare_token\":\"mock-prepare-token\",\"proofofwork\":{\"required\":false,\"seed\":\"\",\"difficulty\":\"\"},\"turnstile\":{\"required\":false,\"dx\":\"\"},\"arkose\":{\"required\":false},\"so\":{}}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/sentinel/chat-requirements/finalize.*",
+      "kind": "json",
+      "body": "{\"token\":\"mock-sentinel-token\",\"so_token\":\"\",\"expire_after\":600,\"expire_at\":0}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/f/conversation/prepare.*",
+      "kind": "json",
+      "body": "{\"conduit_token\":\"mock-conduit-token\"}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/f/conversation$",
+      "kind": "sse_raw",
+      "body": "data: {\"message\":{\"id\":\"a1\",\"author\":{\"role\":\"assistant\"},\"content\":{\"content_type\":\"text\",\"parts\":[\"你好，我是 chatgpt mock 上游。\"]},\"status\":\"finished_successfully\"},\"conversation_id\":\"0f0e0d0c-0b0a-4908-8706-050403020100\",\"error\":null}\n\ndata: [DONE]\n"
+    },
+    {
+      "method": "POST",
+      "path": ".*/backend-anon/conversation.*",
+      "kind": "sse_raw",
+      "body": "data: {\"message\":{\"id\":\"a1\",\"author\":{\"role\":\"assistant\"},\"content\":{\"content_type\":\"text\",\"parts\":[\"你好，我是 chatgpt mock 上游。\"]},\"status\":\"finished_successfully\"},\"conversation_id\":\"0f0e0d0c-0b0a-4908-8706-050403020100\",\"error\":null}\n\ndata: [DONE]\n"
+    },
+    {
+      "method": "GET",
+      "path": ".*/backend-api/conversations/0f0e0d0c-0b0a-4908-8706-050403020100.*",
+      "kind": "json",
+      "body": "{\"id\":\"0f0e0d0c-0b0a-4908-8706-050403020100\",\"title\":\"mock 会话\",\"current_node\":\"a1\",\"mapping\":null,\"messages\":[{\"id\":\"u1\",\"author\":{\"role\":\"user\"},\"content\":{\"content_type\":\"text\",\"parts\":[\"你好\"]}},{\"id\":\"a1\",\"author\":{\"role\":\"assistant\"},\"content\":{\"content_type\":\"text\",\"parts\":[\"你好，我是助手\"]}}],\"page_info\":{\"has_more\":false}}"
+    },
+    {
+      "method": "GET",
+      "path": ".*/backend-api/conversations.*",
+      "kind": "json",
+      "body": "{\"items\":[{\"id\":\"0f0e0d0c-0b0a-4908-8706-050403020100\",\"title\":\"mock 会话\",\"create_time\":1700000000,\"update_time\":1700000100}],\"total\":1,\"limit\":28,\"offset\":0}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/backend-api/conversation/id/0f0e0d0c-0b0a-4908-8706-050403020100/rename.*",
+      "kind": "json",
+      "body": "{\"success\":true}"
+    },
+    {
+      "method": "DELETE",
+      "path": ".*/backend-api/conversation/id/0f0e0d0c-0b0a-4908-8706-050403020100.*",
+      "kind": "json",
+      "body": "{\"success\":true}"
+    },
+    {
+      "method": "POST",
+      "path": ".*/backend-api/stop_conversation.*",
+      "kind": "json",
+      "body": "{\"status\":\"ok\"}"
+    },
+    {
+      "method": "GET",
+      "path": ".*/backend-api/models.*",
+      "kind": "json",
+      "body": "{\"models\":[{\"slug\":\"gpt-6-mini\",\"title\":\"GPT-6 mini\",\"max_tokens\":32000}]}"
+    },
+    {
+      "method": "GET",
+      "path": ".*/backend-api/me.*",
+      "kind": "json",
+      "body": "{\"id\":\"chatgpt-mock\",\"email\":\"mock@example.com\",\"name\":\"chatgpt-mock\"}"
+    },
+    {
+      "method": "GET",
+      "path": ".*/api/auth/session.*",
+      "kind": "json",
+      "body": "{\"user\":{\"id\":\"chatgpt-mock\",\"name\":\"chatgpt-mock\",\"email\":\"mock@example.com\"},\"expires\":\"2035-01-01T00:00:00.000Z\",\"accessToken\":\"mock-cgpt-token\",\"account\":{\"id\":\"chatgpt-mock\"}}"
+    }
+  ],
+  "no_token_usage": true,
+  "session": true,
+  "session_cid": "0f0e0d0c-0b0a-4908-8706-050403020100",
+  "auth_prefixes": [
+    "chatgpt"
+  ],
+  "notes": [
+    "web 逆向渠道（WEB_CLI_CONTRACT）：会话管理 conv-list/show/history/rename/delete",
+    "gaps 明确声明「chatgpt 无标记已读概念」，故不实现 conv-read",
+    "实测用 flash 类模型 gpt-6-mini 抽查"
+  ],
+  "exported_at": "2026-11-08"
+}

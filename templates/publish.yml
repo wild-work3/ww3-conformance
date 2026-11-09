@@ -1,0 +1,77 @@
+# ww3-conformance 契约符合性自检（范例，可选步骤）
+#
+# 用法：把本文件拷到你的插件仓 `.github/workflows/verify.yml`，把 <id> 换成你的插件 ID。
+#
+# **这是可选步骤**：删掉整个文件不影响发布——注册表只校 repo/version/file/sha256。
+# 有摘要就多显示一点（准入徽章、能力矩阵），没有也照常安装。
+#
+# 设计要点：
+#   - 不加 `continue-on-error` —— FAIL 就该红，让作者看见自己的插件哪里违背契约。
+#   - 本工具**不会**因为「能力缺口」而 FAIL，那些记 WARN（如上游只接受单条 user 提问）。
+#   - 想彻底不阻断发布，自己给这一步加 `continue-on-error: true` 即可。
+
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: 构建插件包
+        run: bash build.sh --zip
+
+      - name: 安装 conformance
+        run: go install github.com/wild-work3/ww3-conformance/cmd/ww3-conformance@latest
+
+      # A 层：零配置、零网络。只验契约骨架（manifest / 子命令 / stdout 纯 JSONL /
+      # 生命周期 / 能力一致性）。控制面与会话面会写 SKIP —— 没有 mock 基址时
+      # 那些调用会打到真实上游，本工具绝不做这件事。
+      - name: 契约骨架自检（零配置）
+        run: |
+          ww3-conformance --exe dist/<id>-ext.exe --id <id> --out conformance-report
+
+      # B 层：仓库里有 conformance.json 时自动升级为
+      # 「控制面 + 会话面 + 多轮历史下发 + usage 口径」，全部打本地 mock。
+      # 没有这个文件就不要这一步（下面用 hashFiles 判断）。
+      - name: 完整自检（有 conformance.json 时）
+        if: hashFiles('conformance.json') != ''
+        run: |
+          ww3-conformance --exe dist/<id>-ext.exe --id <id> \
+            --descriptor conformance.json \
+            --out conformance-report \
+            --json-summary conformance-summary.json
+
+      - name: 上传报告与摘要
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance
+          path: |
+            conformance-report/
+            conformance-summary.json
+          if-no-files-found: ignore
+
+      # ---- 可选：把摘要写进注册表 PR ----
+      # 打开这一段就在自检通过后自动向 ww3-ext-registry 提 PR。
+      # 不想让 CI 碰注册表就保持注释。
+      #
+      # - name: 更新注册表条目
+      #   if: github.ref == 'refs/heads/main'
+      #   env:
+      #     GH_TOKEN: ${{ secrets.REGISTRY_PR_TOKEN }}
+      #   run: |
+      #     jq --slurpfile s conformance-summary.json \
+      #       '.conformance = $s[0].conformance | .capabilities = $s[0].capabilities' \
+      #       <id>.json > /tmp/entry.json
+      #     # …… 按 ww3 主仓 docs/PLUGIN_REGISTRY.md §7.1 提 PR
