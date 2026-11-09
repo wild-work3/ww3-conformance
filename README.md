@@ -19,7 +19,11 @@
 go install github.com/wild-work3/ww3-conformance/cmd/ww3-conformance@latest
 
 # 或直接下载 release 二进制（Python / Node 插件作者不需要 Go）
-#   ww3-conformance-{windows,linux,darwin}-{amd64,arm64}
+#   https://github.com/wild-work3/ww3-conformance/releases/latest/download/ww3-conformance-<os>-<arch>[.exe]
+#   os ∈ windows|linux|darwin，arch ∈ amd64|arm64
+# 例（Windows x64）：
+#   curl -fsSL -o ww3-conformance.exe \
+#     https://github.com/wild-work3/ww3-conformance/releases/latest/download/ww3-conformance-windows-amd64.exe
 ```
 
 ## 三种用法
@@ -124,8 +128,25 @@ ww3-conformance --exe ./dist/myext-ext.exe --descriptor ./conformance.json \
 
 ## 接进自己的 CI
 
-[`templates/publish.yml`](templates/publish.yml) 是一份可拷贝的 workflow 范例。
-**它只是范例，不是门禁**：加不加由你决定，不加同样能发布（注册表只校格式）。
+[`templates/publish.yml`](templates/publish.yml) 是一份可拷贝的 workflow 范例（A 层零配置 + 有
+`conformance.json` 时自动升 B 层，不碰注册表）。**它只是范例，不是门禁**：加不加由你决定，不加同样能发布
+（注册表只校格式）。
+
+想要**完整闭环**（构建 → 自检 → 自动生成注册表条目 → 提 PR）的现成范本，看
+[`ww3-workbuddy-ext`](https://github.com/wild-work3/ww3-workbuddy-ext) 的
+`.github/workflows/release.yml` + `scripts/make_registry_entry.py` + `conformance.json`。
+靠本仓 release 预编译的二进制即可在插件仓里跑，**不需要装 Go**：
+
+```bash
+curl -fsSL --retry 3 \
+  https://github.com/wild-work3/ww3-conformance/releases/latest/download/ww3-conformance-windows-amd64.exe \
+  -o ww3-conformance.exe
+./ww3-conformance.exe --exe dist/<id>-ext.exe --descriptor conformance.json \
+  --json-summary conformance-summary.json
+```
+
+发布二进制由 [`.github/workflows/release.yml`](.github/workflows/release.yml) 打 tag `v*` 时产出，
+6 平台资产名固定为 `ww3-conformance-<os>-<arch>[.exe]`（拼 `releases/latest/download/<名字>` 即得，不依赖 tag 命名）。
 
 ---
 
