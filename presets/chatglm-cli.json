@@ -118,5 +118,6 @@
     "模型清单是静态的（不打上游）",
     "积分/签到/额度刷新合并自 glm-ext（accounts.checkin/refresh/resource_detail、credits.get）"
   ],
-  "exported_at": "2026-11-08"
+  "exported_at": "2026-11-08",
+  "exe": "chatglm-cli"
 }

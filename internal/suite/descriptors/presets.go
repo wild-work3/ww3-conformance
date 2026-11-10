@@ -23,7 +23,16 @@ func All(distDir, liveAuthDir string) []suite.Descriptor {
 	names := suite.ListPresets()
 	out := make([]suite.Descriptor, 0, len(names))
 	for _, n := range names {
-		d, err := suite.LoadPreset(n, presetExe(distDir, n), nil)
+		// 先不带 exe 载入：若预设自己写了 `exe` 字段（产物名不合本仓约定时用），
+		// 以它为准（相对 --dist），否则才走预设约定推导（presetExe）。
+		d, err := suite.LoadPreset(n, "", nil)
+		if err == nil {
+			if d.Exe != "" {
+				d.Exe = suite.DescribeExe(d.Exe, distDir)
+			} else {
+				d.Exe = presetExe(distDir, n)
+			}
+		}
 		if err != nil {
 			// 预设坏掉不该让整轮静默少一个渠道：保留占位，Run 会因 manifest 不可用而明确 FAIL。
 			d = suite.Descriptor{ID: n, Kind: "channel", Exe: presetExe(distDir, n),

@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"time"
 
 	"github.com/wild-work3/ww3-conformance/internal/harness"
@@ -32,9 +33,16 @@ const DescriptorSchema = 1
 
 // descriptorFile 是 conformance.json 的磁盘形态。
 type descriptorFile struct {
-	Schema       int              `json:"schema"`
-	ID           string           `json:"id"`
-	Kind         string           `json:"kind"`
+	Schema int    `json:"schema"`
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	// Exe 显式指定可执行文件名（相对 --dist 目录，或绝对路径）。
+	//
+	// 空 = 走 exe.go 的约定推导（`<id>-ext` / `<id>-hook` / `<id>`，`-cli` 型用原名）。
+	// **插件可执行文件名不是契约**（用户 m00634/m00642）：`chatgpt-cli`、`chatglm-cli`
+	// 都是合法产物名。预设/描述文件里写这个字段，就不必为了适配约定而改名。
+	// 在 `--exe` 模式下无意义（命令行给的路径优先）。
+	Exe          string           `json:"exe"`
 	Model        string           `json:"model"`
 	LiveModel    string           `json:"live_model"`
 	Auth         map[string]any   `json:"auth"`
@@ -103,6 +111,12 @@ func LoadFile(path, exe string, args []string) (Descriptor, error) {
 	}
 	if f.Schema != DescriptorSchema {
 		return Descriptor{}, fmt.Errorf("描述文件 schema=%d 不受支持（本工具只认 %d）", f.Schema, DescriptorSchema)
+	}
+	// exe 优先用调用方给的（`--exe` 模式）；否则取描述文件里的 `exe` **原样**，
+	// 相对路径的基准由调用方定（预设 → --dist，作者描述文件 → 描述文件目录），
+	// 因为同一份解析器要服务两种调用现场（见 DescribeExe）。
+	if exe == "" && f.Exe != "" {
+		exe = f.Exe
 	}
 	d := Descriptor{
 		ID: f.ID, Kind: f.Kind, Exe: exe, Args: args,
@@ -218,6 +232,24 @@ func (d Descriptor) IsHook() bool { return d.Kind == "hook" }
 // 注意：presets/ 是**数据目录**，不是代码——它们是改造前硬编码渠道事实的一次性导出物。
 // 工具本身不 import 任何渠道名，删掉整个 presets/ 也照样能跑 --exe。
 func presetDir() string { return absPath("presets") }
+
+// DescribeExe 把描述文件里写的 `exe` 补成一个可直接启动的路径：
+// 相对路径按 base 拼接，**缺扩展名时按当前平台补 `.exe`**（作者只需写一次 `"exe": "chatglm-cli"`，
+// Windows / Linux 两种产物名都能命中）。绝对路径原样返回。
+//
+// 基准由调用方定：预设 → `--dist` 目录；作者自带描述文件 → 描述文件所在目录。
+func DescribeExe(exe, base string) string {
+	if exe == "" {
+		return ""
+	}
+	if !filepath.IsAbs(exe) {
+		exe = filepath.Join(base, exe)
+	}
+	if filepath.Ext(exe) == "" && runtime.GOOS == "windows" {
+		exe += ".exe"
+	}
+	return exe
+}
 
 // LoadPreset 载入内置预设（C 层，等价于原来的 --only <渠道>）。
 func LoadPreset(name, exe string, args []string) (Descriptor, error) {

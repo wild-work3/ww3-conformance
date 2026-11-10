@@ -329,6 +329,11 @@ func pickDescriptors(exe, descriptor, idFlag, dist, liveAuth string, pluginArgs 
 	}
 
 	// ---- 预设模式（C 层，行为与改造前一致）----
+	if descriptor != "" {
+		// --descriptor 只在单插件模式有意义（它描述「这个 exe 长什么样」）。
+		// 预设模式要改可执行文件路径请写 presets/*.json 的 exe 字段，不能静默忽略参数。
+		return nil, fmt.Errorf("--descriptor 需配合 --exe 使用（预设模式请改 presets/*.json 的 exe 字段）")
+	}
 	all := descriptors.All(dist, liveAuth)
 	if len(all) == 0 {
 		return nil, fmt.Errorf("没有内置预设（%s 下的 presets/*.json 为空？）", "presets")

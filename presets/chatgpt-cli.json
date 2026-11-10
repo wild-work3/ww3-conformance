@@ -23,7 +23,7 @@
       "method": "GET",
       "path": "^/$",
       "kind": "raw",
-      "body": "\u003c!doctype html\u003e\u003chtml\u003e\u003chead\u003e\u003ctitle\u003eChatGPT\u003c/title\u003e\u003cscript src=\"/sentinel/20261030/sdk.js\"\u003e\u003c/script\u003e\u003c/head\u003e\u003cbody data-build=\"mock-build-20261030\"\u003eok\u003c/body\u003e\u003c/html\u003e"
+      "body": "<!doctype html><html><head><title>ChatGPT</title><script src=\"/sentinel/20261030/sdk.js\"></script></head><body data-build=\"mock-build-20261030\">ok</body></html>"
     },
     {
       "method": "POST",
@@ -115,5 +115,6 @@
     "gaps 明确声明「chatgpt 无标记已读概念」，故不实现 conv-read",
     "实测用 flash 类模型 gpt-6-mini 抽查"
   ],
-  "exported_at": "2026-11-08"
+  "exported_at": "2026-11-08",
+  "exe": "chatgpt-cli"
 }

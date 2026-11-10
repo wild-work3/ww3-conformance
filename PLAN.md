@@ -205,6 +205,9 @@ ww3-conformance --exe /path/to/python -- /path/to/myext/main.py
 硬约束（写进 schema，工具校验）：
 
 - `schema` 必须为 `1`（前向兼容锚点，不认识的值 → 拒绝载入并报错，不静默降级）。
+- **可选 `exe`**：产物名不叫 `<id>-ext` / `<id>-hook` / `<id>` 时用。相对路径以**描述文件所在目录**为基准，
+  缺扩展名时自动按当前平台补 `.exe`（作者只需写 `"exe": "chatglm-cli"`，两种平台产物名都能命中）。
+  不写则走本仓预设约定（见 `internal/suite/descriptors/exe.go` 包注释——**那是预设约定，不是插件契约**）。
 - `routes[].path` 是**正则**（同 `mock.Route.Path`），`kind` 取值必须是 `internal/mock` 已支持的枚举。
 - **`notes`/`single_turn`/`no_token_usage`/`session` 必须诚实填写**：这几个字段的作用是让工具把「上游真实的能力缺口」
   判成 WARN 而不是 FAIL。填错会让报告撒谎（`protocol/docs/WEB_CLI_CONTRACT.md` §「gaps/quirks 必须诚实填写」同一条纪律）。

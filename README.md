@@ -39,6 +39,10 @@ go install github.com/wild-work3/ww3-conformance/cmd/ww3-conformance@latest
 ww3-conformance --exe /path/to/myext-ext.exe
 ```
 
+> **插件产物名不必是 `<id>-ext`**（用户 m00634/m00642）：`--exe` 直接给路径，叫什么都能跑。
+> B 层描述文件里也可以用 `"exe"` 字段声明产物名（相对描述文件目录，缺扩展名自动补 `.exe`，
+> 所以同一份 `conformance.json` 能同时适配 `chatglm-cli`（Linux）与 `chatglm-cli.exe`（Windows））。
+
 **不提供描述文件时，控制面与会话面自动 SKIP**（写 `SKIP` 而不是跑到真实上游）——
 没有 mock 基址时那些调用会打到插件默认端点，等于用真实账号做探测，本工具绝不做这件事。
 
