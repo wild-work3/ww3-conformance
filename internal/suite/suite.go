@@ -8,6 +8,8 @@
 //	会话面     chat.generate 流式事件序列、结束语义、错误分类
 //	多轮对话   三轮真实场景，验证上下文累积与消息历史完整下发
 //	会话管理   web 逆向渠道的 conv-list/show/history/rename/delete（按 schema.gaps 判定）
+//	拦截器     hook.stream 双向流（web 逆向渠道之外的第二种插件形态）
+//	Web 界面   ui slot + serve 命令（就绪帧/回环/healthz/entry/资源自包含）
 //	用量口径   usage 字段归一（reported vs unknown，禁止臆造）
 //	真实上游   flash 类低消耗模型抽查（需有效凭据，缺失即 FAIL）
 //
@@ -86,6 +88,9 @@ type Descriptor struct {
 	Notes []string
 	// Hook 是拦截器插件专属的可选配置（只有 kind=hook 用得上）。
 	Hook *hookConfig
+	// UI 是插件可选的自证配置（conformance.json 的 `ui` 段）：serve 起来后
+	// 插件专属 HTTP API 的期望响应。通用 serve 契约不需要声明，工具自动验。
+	UI *uiConfig
 }
 
 // Options 是运行参数。
@@ -231,6 +236,12 @@ func Run(ctx context.Context, d Descriptor, opts Options) *check.PluginReport {
 	if d.IsHook() {
 		hookStream(ctx, env, rep, d.Hook)
 	}
+
+	// ---- Web 界面（ui slot + serve 命令）----
+	//
+	// 零上游网络（只打 127.0.0.1），所以 A 层（无 mock）也能安全跑——
+	// 它是唯一能真正拉起子进程验证运行时行为的层级。
+	uiServe(ctx, env, rep, m, d.UI)
 
 	// ---- 会话管理（web 逆向渠道）----
 	if d.Session {

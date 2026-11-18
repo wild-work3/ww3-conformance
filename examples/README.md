@@ -14,6 +14,13 @@
 `--dist` 全量回归会把它当渠道跑（缺 mock 路由、会话面跳过，语义错位）。
 拦截器请用 `--exe ... --descriptor examples/loopguard.json` 单独跑。
 
+## `ui.json`
+
+带 Web 界面的插件（manifest 声明 `ui` slot）的描述文件示例，演示 `ui.probes` 段：
+声明 serve 起来后插件专属 HTTP API 的期望响应（状态码/正文包含），供自动断言自证。
+未声明 `ui` 段时通用 serve 契约（就绪帧/回环/healthz/entry/资源自包含）仍会自动验；
+动态引用的根绝对路径资源静态扫描测不到，发布前用 `--ui-proxy` 手动点一遍页面。
+
 ## 怎么用
 
 ```bash

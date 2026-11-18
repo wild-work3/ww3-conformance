@@ -44,6 +44,7 @@ import (
 	"github.com/wild-work3/ww3-conformance/internal/report"
 	"github.com/wild-work3/ww3-conformance/internal/suite"
 	"github.com/wild-work3/ww3-conformance/internal/suite/descriptors"
+	"github.com/wild-work3/ww3-conformance/internal/uiproxy"
 )
 
 func main() {
@@ -52,29 +53,30 @@ func main() {
 	own, pluginArgs := splitArgs(os.Args[1:])
 
 	var (
-		dist      = flag.String("dist", "../dist", "构建产物目录（含各插件 exe；与 --exe 互斥）")
-		exe       = flag.String("exe", "", "单插件模式：被测程序路径（可以是解释器，如 python.exe）")
+		dist       = flag.String("dist", "../dist", "构建产物目录（含各插件 exe；与 --exe 互斥）")
+		exe        = flag.String("exe", "", "单插件模式：被测程序路径（可以是解释器，如 python.exe）")
 		descriptor = flag.String("descriptor", "", "描述文件路径（缺省：--exe 时在 exe 同目录找 conformance.json）")
-		idFlag    = flag.String("id", "", "显式插件 ID（缺省从 manifest.id 取）")
-		only      = flag.String("only", "", "只跑指定插件（逗号分隔；预设模式与 --exe 都可用）")
-		skip      = flag.String("skip", "", "跳过指定插件（逗号分隔）")
-		mode      = flag.String("mode", "mock", "mock | live（offline 是 mock 的别名）")
-		outDir    = flag.String("out", "reports", "报告输出目录")
-		workDir   = flag.String("work", "", "夹具临时根目录（空则用系统临时目录）")
-		keep      = flag.Bool("keep", false, "保留夹具临时目录（排查用）")
-		verbose   = flag.Bool("v", false, "打印每个断言")
-		listOnly  = flag.Bool("list", false, "只列出可跑的插件并退出")
-		planOnly  = flag.Bool("plan", false, "只打印 live 计划（渠道→凭据→模型）并退出，不发起任何请求")
-		liveAuth  = flag.String("live-auth", "", "旧写法：凭据目录下的 <插件ID>.json（等价于 --data + 自动发现）")
-		liveData  = flag.String("data", "", "真实凭据根目录（含 auths/*.json；也兼容 dev/dist 的 <dir>/<名字>.json）")
-		liveName  = flag.String("auth", "", "真实凭据文件名（去 .json；如 glm-6982e0ad0efeac7998789a48）")
-		liveModel = flag.String("model", "", "真实对话用的模型 ID（覆盖描述符默认；只能配单插件）")
-		liveTurns = flag.Int("live-turns", 1, "真实上游对话轮数：1=只跑一轮（默认，避免风控），2=再验一轮上下文")
-		summaryTo = flag.String("json-summary", "", "输出可直接贴进插件注册表的摘要 JSON（缺省 <out>/conformance-summary.json）")
-		noSummary = flag.Bool("no-summary", false, "不写摘要文件")
-		snippet   = flag.Bool("print-snippet", false, "把摘要渲染成可粘贴的 conformance/capabilities 片段打到 stdout")
-		strict    = flag.Bool("strict", false, "把 WARN 也算失败（默认不算）")
-		timeout   = flag.Duration("timeout", 20*time.Minute, "整体超时")
+		idFlag     = flag.String("id", "", "显式插件 ID（缺省从 manifest.id 取）")
+		only       = flag.String("only", "", "只跑指定插件（逗号分隔；预设模式与 --exe 都可用）")
+		skip       = flag.String("skip", "", "跳过指定插件（逗号分隔）")
+		mode       = flag.String("mode", "mock", "mock | live（offline 是 mock 的别名）")
+		outDir     = flag.String("out", "reports", "报告输出目录")
+		workDir    = flag.String("work", "", "夹具临时根目录（空则用系统临时目录）")
+		keep       = flag.Bool("keep", false, "保留夹具临时目录（排查用）")
+		verbose    = flag.Bool("v", false, "打印每个断言")
+		listOnly   = flag.Bool("list", false, "只列出可跑的插件并退出")
+		planOnly   = flag.Bool("plan", false, "只打印 live 计划（渠道→凭据→模型）并退出，不发起任何请求")
+		liveAuth   = flag.String("live-auth", "", "旧写法：凭据目录下的 <插件ID>.json（等价于 --data + 自动发现）")
+		liveData   = flag.String("data", "", "真实凭据根目录（含 auths/*.json；也兼容 dev/dist 的 <dir>/<名字>.json）")
+		liveName   = flag.String("auth", "", "真实凭据文件名（去 .json；如 glm-6982e0ad0efeac7998789a48）")
+		liveModel  = flag.String("model", "", "真实对话用的模型 ID（覆盖描述符默认；只能配单插件）")
+		liveTurns  = flag.Int("live-turns", 1, "真实上游对话轮数：1=只跑一轮（默认，避免风控），2=再验一轮上下文")
+		summaryTo  = flag.String("json-summary", "", "输出可直接贴进插件注册表的摘要 JSON（缺省 <out>/conformance-summary.json）")
+		noSummary  = flag.Bool("no-summary", false, "不写摘要文件")
+		snippet    = flag.Bool("print-snippet", false, "把摘要渲染成可粘贴的 conformance/capabilities 片段打到 stdout")
+		strict     = flag.Bool("strict", false, "把 WARN 也算失败（默认不算）")
+		timeout    = flag.Duration("timeout", 20*time.Minute, "整体超时")
+		uiProxy    = flag.String("ui-proxy", "", "手动联调（非自动化）：以 gateway 同款 /ext/<id> 反代挂载插件 serve，长驻运行 Ctrl+C 退出；不产报告不写摘要。需配合 --exe")
 	)
 	flag.CommandLine.SetOutput(os.Stderr)
 	flag.Usage = func() {
@@ -82,12 +84,34 @@ func main() {
 		fmt.Fprintf(os.Stderr, "三种用法：\n")
 		fmt.Fprintf(os.Stderr, "  --exe <程序> [-- <插件参数>]        单插件零配置（A 层，零网络）\n")
 		fmt.Fprintf(os.Stderr, "  --exe <程序> --descriptor <文件>    单插件 + 描述文件（B 层，全打本地 mock）\n")
-		fmt.Fprintf(os.Stderr, "  --dist <目录>                       跑内置预设（C 层，原 19 渠道行为）\n\n")
+		fmt.Fprintf(os.Stderr, "  --dist <目录>                       跑内置预设（C 层，原 19 渠道行为）\n")
+		fmt.Fprintf(os.Stderr, "  --exe <程序> --ui-proxy [127.0.0.1:端口]  手动联调：gateway 同款 /ext 反代挂载插件 serve（长驻，不产报告）\n\n")
 		flag.PrintDefaults()
 	}
 	// 只解析 `--` 之前的部分：`--` 之后的全部归被测插件（W3-51 §3.1.1）。
 	// 直接 flag.Parse() 会把 `--` 之后的当成多余位置参数。
 	flag.CommandLine.Parse(own)
+
+	// ---- 手动联调模式（PLAN 阶段 5）：与准入判定完全解耦，长驻到 Ctrl+C ----
+	if *uiProxy != "" {
+		if *exe == "" {
+			fmt.Fprintln(os.Stderr, "--ui-proxy 需要 --exe <插件程序>（联调对象是单个插件，不接受 --dist）")
+			os.Exit(2)
+		}
+		if *dist != "../dist" && *dist != "" {
+			fmt.Fprintln(os.Stderr, "--ui-proxy 与 --dist 不能同时使用")
+			os.Exit(2)
+		}
+		for _, f := range []string{"json-summary", "print-snippet", "plan", "list", "out", "strict"} {
+			if flag.Lookup(f) != nil && flag.Lookup(f).Value.String() != flag.Lookup(f).DefValue {
+				fmt.Fprintf(os.Stderr, "--ui-proxy 是手动联调模式，不产报告，不接受 --%s\n", f)
+				os.Exit(2)
+			}
+		}
+		runUIProxy(*uiProxy, *exe, pluginArgs, *liveData, *keep, *workDir)
+		return // runUIProxy 内部自行退出
+	}
+
 	if flag.NArg() > 0 {
 		fmt.Fprintf(os.Stderr, "多余的参数：%v（插件参数要写在 `--` 之后）\n", flag.Args())
 		os.Exit(2)
@@ -272,6 +296,48 @@ func main() {
 	fmt.Fprintf(os.Stderr, "报告: %s\n      %s\n", md, js)
 
 	if b.Verdict() == check.Fail || (*strict && tot[check.Warn] > 0) {
+		os.Exit(1)
+	}
+}
+
+// runUIProxy 启动手动联调反代（PLAN 阶段 5）。
+//
+// 数据目录：--data 指向真实目录则复用（可带真实凭据调试）；否则建临时夹具，
+// 退出时清理（--keep 保留）。阻塞到 Ctrl+C；启动失败退出码 1，正常退出 0。
+func runUIProxy(addr, exe string, pluginArgs []string, dataDir string, keep bool, workDir string) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	tmp := ""
+	if dataDir == "" {
+		root := workDir
+		if root == "" {
+			root = os.TempDir()
+		}
+		var err error
+		tmp, err = os.MkdirTemp(root, "ww3-uiproxy-")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "建临时数据目录失败: %v\n", err)
+			os.Exit(1)
+		}
+		dataDir = filepath.Join(tmp, "data")
+		for _, sub := range []string{"auths", "logs", "stat"} {
+			if err := os.MkdirAll(filepath.Join(dataDir, sub), 0o700); err != nil {
+				fmt.Fprintf(os.Stderr, "建数据目录失败: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		if !keep {
+			defer os.RemoveAll(tmp)
+		} else {
+			fmt.Fprintf(os.Stderr, "数据目录（保留）: %s\n", dataDir)
+		}
+	}
+
+	if err := uiproxy.Run(ctx, uiproxy.Options{
+		Exe: exe, Args: pluginArgs, DataDir: dataDir, ProxyAddr: addr,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "UI 联调退出: %v\n", err)
 		os.Exit(1)
 	}
 }

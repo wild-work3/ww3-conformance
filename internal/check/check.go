@@ -27,14 +27,15 @@ const (
 type Level string
 
 const (
-	LevelContract  Level = "契约骨架" // manifest/call/stdio/ping/生命周期
-	LevelControl   Level = "控制面"  // 声明的每个能力
-	LevelChat      Level = "会话面"  // chat.generate 单轮
-	LevelMultiTurn Level = "多轮对话" // 模拟真实场景的多轮上下文
-	LevelSession   Level = "会话管理" // web 逆向渠道 conv-*
-	LevelHook      Level = "拦截器"  // hook.stream 双向流（HOOK_PROTOCOL）
-	LevelLive      Level = "真实上游" // 真实凭据 + flash 模型抽查
-	LevelUsage     Level = "用量口径" // usage 字段口径一致性
+	LevelContract  Level = "契约骨架"   // manifest/call/stdio/ping/生命周期
+	LevelControl   Level = "控制面"    // 声明的每个能力
+	LevelChat      Level = "会话面"    // chat.generate 单轮
+	LevelMultiTurn Level = "多轮对话"   // 模拟真实场景的多轮上下文
+	LevelSession   Level = "会话管理"   // web 逆向渠道 conv-*
+	LevelHook      Level = "拦截器"    // hook.stream 双向流（HOOK_PROTOCOL）
+	LevelUI        Level = "Web 界面" // ui slot + serve 命令（PLUGIN_PROTOCOL §3.1.1 / PLUGIN_CLI §2）
+	LevelLive      Level = "真实上游"   // 真实凭据 + flash 模型抽查
+	LevelUsage     Level = "用量口径"   // usage 字段口径一致性
 )
 
 // Mode 是测试运行模式。
@@ -134,7 +135,7 @@ func (p *PluginReport) ByLevel() []struct {
 	Level Level
 	Items []Assertion
 } {
-	order := []Level{LevelContract, LevelControl, LevelChat, LevelMultiTurn, LevelUsage, LevelSession, LevelHook, LevelLive}
+	order := []Level{LevelContract, LevelControl, LevelChat, LevelMultiTurn, LevelUsage, LevelSession, LevelHook, LevelUI, LevelLive}
 	buckets := map[Level][]Assertion{}
 	for _, c := range p.Checks {
 		buckets[c.Level] = append(buckets[c.Level], c)

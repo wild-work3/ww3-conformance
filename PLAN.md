@@ -349,6 +349,71 @@ ww3-conformance --exe /path/to/python -- /path/to/myext/main.py
 
 ---
 
+## 5.5 阶段 5 · UI slot：serve 契约自动断言 + 手动反代联调（已实施，2026-11-18）
+
+> 用户定案：**conformance 对声明了 `serve` 的插件，提供与 gateway 一样的反代机制，
+> 让插件作者不依赖 gateway + core 就能单独调试插件的前端 UI——这是手动联调模式，
+> 不集成在自动化构建中，属 conformance 的附属工具功能；其它 serve 模式下的 HTTP API 仍可自动化验证。**
+
+### 5.5.1 自动化：新增 `Web 界面` 层（`check.LevelUI`）
+
+- 位置：`internal/suite/ui.go`，跑在拦截器层之后；未声明 `ui` → SKIP（契约允许，0~N 个 slot）。
+- **零上游网络**（只打 127.0.0.1）——UI 层是唯一能在 A 层（零配置）安全跑的运行时断言
+  （控制面/会话面因可能打到真实上游而必须跳过）。
+- 断言清单（契约出处：PLUGIN_PROTOCOL §3.1.1 / PLUGIN_CLI §2）：
+  | ID | 断言 |
+  |---|---|
+  | `ui.declared` | ui 声明情况；**反向 WARN**：实现了 serve 却没声明 ui（gateway 永远不会拉起它） |
+  | `ui.shape` | slot id 同位置唯一、title 纯文本、entry 过 ValidEntry 同口径校验 |
+  | `ui.serve.ready` | stdout 第一条 = `{"v":1,"op":"serve-ready","listen":"127.0.0.1:<port>"}` |
+  | `ui.serve.loopback` | listen host 必须 127.0.0.1；**负例**：`--listen 0.0.0.0:0` 必须非 0 退出 |
+  | `ui.serve.quiet` | 就绪帧后 stdout 静默（gateway 靠 stdout 首帧定位端口） |
+  | `ui.serve.healthz` | 200 且两次一致（无副作用探针） |
+  | `ui.serve.entry.*` | 每个 slot 的 `/<entry>` → 200 + text/html |
+  | `ui.serve.selfcontained.*` | entry HTML 无 `src="/`、`href="/`、`url(/` 根绝对路径引用（**FAIL**——契约明说 core 无法从反代侧侦测，只能在此测；JS 动态引用无法静态发现，写进报告请用联调模式实测） |
+  | `ui.serve.probe.*` | 描述文件 `ui.probes` 声明的插件专属 HTTP API 自证（可选；无声明 SKIP） |
+  | `ui.serve.exit` | 终止后退出、无残留（W3-18）；Windows 无法发 SIGTERM，优雅退出未验证诚实写进 detail |
+- 实现注意（踩过）：`wire.Frame` 没有 `Listen` 字段，直接 Unmarshal 会静默丢 listen → 独立 `ServeReady` 结构；
+  `wire.Spawn` 是 JSONL-RPC readLoop，不适用「读一行让进程跑着」→ 新增 `wire.SpawnServe`；
+  长驻进程必须 Kill 兜底，否则准入跑完留孤儿 serve（W3-18）。
+- 夹具：工作区 `temp/uiserve/`（非交付物）——合规插件全 PASS；环境变量负例
+  （`UISERVE_ABS_ASSET`/`UISERVE_BAD_ENTRY`/`UISERVE_NOISY`/`UISERVE_NO_UI`）逐条验证 FAIL/WARN 真能被抓住。
+
+### 5.5.2 手动联调：`--ui-proxy`（附属工具，非自动化）
+
+```bash
+ww3-conformance --exe dist/xxx-ext.exe --ui-proxy 127.0.0.1:18788 [--data <真实数据目录>]
+```
+
+- `internal/uiproxy`：spawn `serve --data <dir> --listen 127.0.0.1:0`（与 gateway webproc **完全同参**），
+  读就绪帧后在本机端口起 HTTP，**逐项复刻 gateway 的 `/ext` 分支**：
+  `/ext/<id>` → 308 尾斜杠；`/ext/<id>/*` → 剥前缀转发 + `X-WW3-Upstream: ext:<id>` + `FlushInterval:-1`；
+  非法 id 400；未声明 id 404。
+- `/` 生成极简索引页（列 manifest.ui 的 main/settings slot 链接，模拟宿主标签导航，不拷 gateway 资产）。
+- **反代 HTML 时顺带扫根绝对路径**，命中往 stderr 打 WARN（不改响应体）——「直连能显示、集成必错」
+  的缺陷在单插件调试时就能看见。
+- 刻意差异（写进输出与索引页）：无管理鉴权；无 `/core /gw /v1`（插件页面 fetch 这些前缀会 404，需要完整栈）。
+- 生命周期：长驻到 Ctrl+C；退出码 0（正常）/ 1（启动失败）；**不产报告、不写摘要、与准入判定解耦**；
+  `--ui-proxy` 与 `--dist`、`--json-summary` 等报告开关互斥（exit 2）；临时数据目录默认清理（`--keep` 保留），
+  `--data` 可指真实目录带凭据调试。**不进 build.sh / run_regress.sh / templates/publish.yml**。
+
+### 5.5.3 边界（宿主侧不归本工具）
+
+gateway 宿主壳（iframe 布局、标签排序、`[hidden]` 类 CSS 缺陷、`/gw/ui/*` 聚合）不是插件契约，
+由主仓 `temp/test_ui_shell.py` 覆盖；本工具只管「插件交出来的东西合不合契约」。
+
+### 5.5.4 验收（2026-11-18 实测）
+
+- `--exe temp/uiserve/uiserve.exe`（A 层）→ UI 层 11 PASS / 1 SKIP（probes 未声明），全绿；
+- `--descriptor`（B 层带 `ui.probes`）→ probe PASS；
+- 四个负例开关逐条触发对应 FAIL/WARN；单元测试 `internal/suite/ui_test.go`（扫描器/entry/parseUI）；
+- `--ui-proxy` 实测：308 / entry 200 / healthz / 插件 API / 未声明 id 404 / 宿主路径 404 提示 /
+  根绝对路径资源 404 + stderr WARN 全部符合；
+- 全量 `--dist ../dist` → **PASS=971 / FAIL=0 / WARN=22 / SKIP=20**（与改造前基线
+  971/0/22/1 相比：PASS/WARN 逐字相同，+19 SKIP = 19 个预设各一条 `ui.declared` SKIP）。
+
+---
+
 ## 6. 未决问题（实施时再定，先记录）
 
 1. **描述文件的 schema 版本演进**：`schema:1` 是锚点，将来加字段一律 append-only；破坏性改动必须 `schema:2` 并让旧值报错（与注册表 `schema:2` 同一条纪律）。

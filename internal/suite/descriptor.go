@@ -42,24 +42,46 @@ type descriptorFile struct {
 	// **插件可执行文件名不是契约**（用户 m00634/m00642）：`chatgpt-cli`、`chatglm-cli`
 	// 都是合法产物名。预设/描述文件里写这个字段，就不必为了适配约定而改名。
 	// 在 `--exe` 模式下无意义（命令行给的路径优先）。
-	Exe          string           `json:"exe"`
-	Model        string           `json:"model"`
-	LiveModel    string           `json:"live_model"`
-	Auth         map[string]any   `json:"auth"`
-	Account      map[string]any   `json:"account"`
-	AuthName     string           `json:"auth_name"`
-	AccountUID   string           `json:"account_uid"`
-	ExtraConfig  map[string]any   `json:"extra_config"`
-	Routes       []routeFile      `json:"routes"`
-	SingleTurn   bool             `json:"single_turn"`
-	NoTokenUsage bool             `json:"no_token_usage"`
-	Session      bool             `json:"session"`
-	SessionCID   string           `json:"session_cid"`
-	SessionMID   string           `json:"session_mid"`
-	AuthPrefixes []string         `json:"auth_prefixes"`
-	LiveAnon     bool             `json:"live_anon"`
-	Notes        []string         `json:"notes"`
-	Hook         *hookConfig      `json:"hook"`
+	Exe          string         `json:"exe"`
+	Model        string         `json:"model"`
+	LiveModel    string         `json:"live_model"`
+	Auth         map[string]any `json:"auth"`
+	Account      map[string]any `json:"account"`
+	AuthName     string         `json:"auth_name"`
+	AccountUID   string         `json:"account_uid"`
+	ExtraConfig  map[string]any `json:"extra_config"`
+	Routes       []routeFile    `json:"routes"`
+	SingleTurn   bool           `json:"single_turn"`
+	NoTokenUsage bool           `json:"no_token_usage"`
+	Session      bool           `json:"session"`
+	SessionCID   string         `json:"session_cid"`
+	SessionMID   string         `json:"session_mid"`
+	AuthPrefixes []string       `json:"auth_prefixes"`
+	LiveAnon     bool           `json:"live_anon"`
+	Notes        []string       `json:"notes"`
+	Hook         *hookConfig    `json:"hook"`
+	UI           *uiConfig      `json:"ui"`
+}
+
+// uiConfig 是描述文件里 `ui` 段的形态（可选，W3-61）。
+//
+// 通用 serve 契约（就绪帧/回环/healthz/entry/自包含）由工具自动验，**不需要**作者声明；
+// 这里只承载作者自证的**插件专属 HTTP API**：serve 起来后这些路径应该返回什么。
+// 例：
+//
+//	"ui": {"probes": [{"path": "/api/config", "want_status": 200, "body_contains": "enabled"}]}
+type uiConfig struct {
+	Probes []uiProbe `json:"probes"`
+}
+
+// uiProbe 是一条插件专属 HTTP API 自证。
+type uiProbe struct {
+	// Path 是插件 HTTP 根下的路径（允许带前导 /，工具会归一化）。
+	Path string `json:"path"`
+	// WantStatus 期望状态码，缺省 200。
+	WantStatus int `json:"want_status"`
+	// BodyContains 响应体必须包含的子串（可空 = 只验状态码）。
+	BodyContains string `json:"body_contains"`
 }
 
 // routeFile 是 mock.Route 的 JSON 形态。
@@ -133,6 +155,7 @@ func LoadFile(path, exe string, args []string) (Descriptor, error) {
 		LiveAnon:     f.LiveAnon,
 		Notes:        f.Notes,
 		Hook:         f.Hook,
+		UI:           f.UI,
 	}
 	for i, r := range f.Routes {
 		if !mockKinds[r.Kind] {
@@ -220,8 +243,21 @@ func (d *Descriptor) Validate() error {
 	if d.Kind == "hook" && len(d.Routes) > 0 {
 		return fmt.Errorf("hook 插件不接受 routes（拦截器没有上游端点，不该有 mock 路由表）")
 	}
+	for i, p := range d.UIProbes() {
+		if p.Path == "" {
+			return fmt.Errorf("ui.probes[%d].path 为空", i)
+		}
+	}
 	// ID 允许留空：suite.Run 会从 manifest.id 回填（作者不必在描述文件里重复一遍身份）。
 	return nil
+}
+
+// UIProbes 取 ui 自证探针列表（UI 段为 nil 时返回空）。
+func (d *Descriptor) UIProbes() []uiProbe {
+	if d.UI == nil {
+		return nil
+	}
+	return d.UI.Probes
 }
 
 // IsHook 报告是否是拦截器插件。

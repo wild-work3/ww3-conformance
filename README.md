@@ -80,6 +80,68 @@ ww3-conformance --exe /path/to/python -- /path/to/myext/main.py
 
 ---
 
+## UI 插件：serve 契约断言 + 手动反代联调（W3-61）
+
+manifest 声明了 `ui`（主面板/设置标签）的插件会多验一层 **Web 界面**（零上游网络，
+A 层即可跑）：serve 就绪帧、只监听回环（`--listen 0.0.0.0:0` 必须被拒绝）、就绪后
+stdout 静默、`/healthz`、每个 slot 的 entry 可访问、**页面无根绝对路径资源引用**
+（`src="/…"` 这类在 gateway 反代剥前缀后会 404，契约明说 core 无法侦测，只能在此测）、
+终止后无残留。插件专属 HTTP API 可在 `conformance.json` 里自证（完整示例
+`examples/ui.json`）：
+
+```json
+{ "schema": 1, "id": "myext",
+  "ui": { "probes": [{"path": "/api/config", "want_status": 200, "body_contains": "enabled"}] } }
+```
+
+### 如何验证一个 UI 插件（推荐流程）
+
+**第 1 步：自动断言（CI 可跑，零上游网络）**
+
+```bash
+ww3-conformance --exe dist/myext-ext.exe                     # A 层：UI 层必跑（无需 conformance.json）
+ww3-conformance --exe dist/myext-ext.exe --descriptor conformance.json   # B 层：额外验 ui.probes 自证 API
+```
+
+拿到报告后逐条核对 `Web 界面` 层：
+
+| 断言 | 不过时怎么修 |
+|---|---|
+| `ui.declared` WARN | manifest 加 `"ui":{"main":[…],"settings":[…]}`，或删掉 serve 命令（声明与实现二选一） |
+| `ui.serve.loopback.reject` | serve 里硬拒非 127.0.0.1 的 `--listen`（非 0 退出），gateway 也这么传参 |
+| `ui.serve.quiet` | 就绪帧后**日志一律走 stderr/文件**，stdout 只许那一帧 serve-ready |
+| `ui.serve.entry.*` | slot 的 `entry` 路径相对插件目录且 serve 能按 `/<entry>` 返回 200 text/html |
+| `ui.serve.selfcontained.*` | 页面里 `src="/…"`、`href="/…"`、`url(/…)` 改成相对路径（见第 2 步） |
+| `ui.serve.exit` | SIGTERM/退出信号后进程要退干净；Windows 下至少做到 Ctrl+C 能回收 |
+
+**第 2 步：手动联调（非自动化，看真实页面）**
+
+```bash
+ww3-conformance --exe dist/myext-ext.exe --ui-proxy 127.0.0.1:18788 [--data <真实数据目录>]
+```
+
+浏览器打开打印出的入口（`/` 列出全部 slot 链接，形状与集成 gateway 后一致：
+`/ext/<id>/<entry>`）。这个模式刻意复刻 gateway 的 `/ext` 分支，所以：
+
+- **根绝对路径资源会 404、命中时 stderr 打 WARN** —— 「直连能显示、集成必错」的缺陷
+  在集成前就能看见；点一遍页面把每个资源都触发到（动态 fetch 静态扫描测不到）。
+- 页面里 `fetch('/core/…')`、`/gw/…`、`/v1/…` 会 404 —— 这些前缀归宿主（gateway）接管，
+  插件页面应只调自己的 API（`/api/…`）或经 postMessage 与宿主协作。
+- 要验登录态/凭据相关页面，用 `--data` 指向真实数据目录（缺省是隔离的临时夹具，`--keep` 可保留）。
+
+**第 3 步：集成验收（归宿主，不归本工具）**
+
+`--ui-proxy` 通过后再跑完整栈（gateway + core）验证宿主壳行为（标签排序、iframe、主题广播）——
+那是 gateway 的契约，由主仓 `temp/test_ui_shell.py` 覆盖。
+
+### `--ui-proxy` 生命周期与边界
+
+- 长驻运行，Ctrl+C 退出并回收插件 serve 进程（不产报告、不写摘要，与准入判定解耦，**不进 CI**）。
+- 与 `--dist`、`--json-summary` 等报告开关互斥（exit 2）；临时数据目录默认退出即清理。
+- 无管理鉴权（本机回环、仅供开发调试）；反向 WARN「实现了 serve 却没声明 ui」在自动断言里。
+
+---
+
 ## 四层可测深度与三态结论
 
 | 层 | 触发条件 | 覆盖 |

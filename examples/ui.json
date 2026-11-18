@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "id": "uiexample",
+  "name": "带 Web 界面的插件（ui 段示例）",
+  "version": "1.0.0",
+  "kind": "channel",
+  "model": "mock-model",
+  "routes": [],
+  "ui": {
+    "probes": [
+      {
+        "path": "/api/config",
+        "want_status": 200,
+        "body_contains": "enabled"
+      },
+      {
+        "path": "/api/missing",
+        "want_status": 404
+      }
+    ]
+  },
+  "notes": [
+    "ui.probes 是可选自证：serve 起来后插件专属 HTTP API 的期望响应；未声明时该断言 SKIP",
+    "通用 serve 契约（就绪帧/回环/healthz/entry/自包含）不需要声明，工具自动验",
+    "静态扫描测不到 JS 动态引用的根绝对路径资源，发布前用 --ui-proxy 手动点一遍页面"
+  ]
+}
