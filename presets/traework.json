@@ -80,5 +80,6 @@
     "SOLO 命名事件流（event: output/token_usage/done），**不输出 [DONE]** 为刻意行为",
     "loopback_callback 只活在 auth.begin 进程内，实际走 auth.finish 粘贴兜底"
   ],
-  "exported_at": "2026-11-08"
+  "exported_at": "2026-11-08",
+  "auth_name": "trae-mock"
 }

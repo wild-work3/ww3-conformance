@@ -119,5 +119,6 @@
     "积分/签到/额度刷新合并自 glm-ext（accounts.checkin/refresh/resource_detail、credits.get）"
   ],
   "exported_at": "2026-11-08",
-  "exe": "chatglm-cli"
+  "exe": "chatglm-cli",
+  "auth_name": "glm-mock"
 }

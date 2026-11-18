@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -127,46 +128,145 @@ func contract(ctx context.Context, env *harness.Env, rep *check.PluginReport) ma
 	return m
 }
 
-// cliCheck 检查四个必需子命令是否可用（不依赖 IPC）。
+// cliCheck 检查 CLI 外壳（不依赖 IPC）：--help 详细手册、必需子命令、--version、用法错误退码。
+//
+// W3-57 定案：手册一律走 **stdout** 且 rc=0（与 --version 同口径，便于 `| less` / 脚本抓取）。
+// 断言强度分两档：顶层手册 / 自定义命令手册 / --version / 非法命令 是硬断言（FAIL）；
+// 四个契约命令逐条手册是软断言（WARN）—— 它们早已存在，但 D7（systemone/images）暂缓期间
+// 不得让整渠道变红，缺一条契约命令仍值得看见，故 WARN 不 FAIL。
 func cliCheck(ctx context.Context, env *harness.Env, rep *check.PluginReport) {
-	type tc struct {
-		id, name string
-		args     []string
+	add := func(id, name string, st check.Status, detail, contract string) {
+		rep.Add(check.Assertion{Level: check.LevelContract, ID: id, Name: name,
+			Status: st, Detail: detail, Contract: contract})
 	}
-	cases := []tc{
-		{"cli.call", "子命令 call 存在", []string{"call", "--help"}},
-		{"cli.stdio", "子命令 stdio 存在", []string{"stdio", "--help"}},
-		{"cli.manifest", "子命令 manifest 存在", []string{"manifest", "--help"}},
-		{"cli.ping", "子命令 ping 存在", []string{"ping", "--help"}},
+	// run 返回 stdout / 合并正文 / 退出码；手册断言只看 stdout（走错流就算违背契约）
+	run := func(args ...string) (so, all string, code int, err error) {
+		body, eb, c, e := env.RunCmd(ctx, args, nil, 15*time.Second)
+		return string(body), string(body) + string(eb), c, e
 	}
-	for _, c := range cases {
-		out, errb, code, err := env.RunCmd(ctx, c.args, nil, 15*time.Second)
-		// --help 通常返回非 0（ErrHelp），只要能打出用法即视为存在
-		body := string(out) + string(errb)
-		st, detail := check.Pass, "可用"
-		if err != nil && code == 0 {
-			st, detail = check.Fail, "执行失败: "+err.Error()
-		} else if !strings.Contains(body, "call") && !strings.Contains(body, "stdio") &&
-			!strings.Contains(body, "manifest") && !strings.Contains(body, "ping") &&
-			!strings.Contains(body, "用法") && !strings.Contains(body, "Usage") {
-			st, detail = check.Warn, "无用法输出（可能未实现该子命令）"
+
+	// ① 顶层 --help：详细手册必须在 stdout 里，且含关键小节
+	so, _, code, err := run("--help")
+	miss := []string{}
+	for _, k := range []string{"用法", "命令", "契约命令", "开关", "双短横线"} {
+		if !strings.Contains(so, k) {
+			miss = append(miss, k)
 		}
-		rep.Add(check.Assertion{Level: check.LevelContract, ID: c.id, Name: c.name,
-			Status: st, Detail: detail, Contract: "PLUGIN_CLI §2"})
+	}
+	switch {
+	case err != nil && code == 0:
+		add("cli.help", "--help 详细手册", check.Fail, "执行失败: "+err.Error(), "PLUGIN_CLI §3/§9")
+	case code != 0:
+		add("cli.help", "--help 详细手册", check.Fail, fmt.Sprintf("rc=%d（--help 必须 rc=0）", code), "PLUGIN_CLI §3/§9")
+	case strings.TrimSpace(so) == "":
+		add("cli.help", "--help 详细手册", check.Fail, "stdout 为空（手册走到了 stderr）", "PLUGIN_CLI §3/§9")
+	case len(miss) > 0:
+		add("cli.help", "--help 详细手册", check.Fail, "手册缺小节: "+strings.Join(miss, ", "), "PLUGIN_CLI §3/§9")
+	default:
+		add("cli.help", "--help 详细手册", check.Pass, fmt.Sprintf("stdout %d 字节，含用法/命令/契约命令/开关/双短横线", len(so)), "PLUGIN_CLI §3/§9")
+	}
+
+	// ② -h / help 两个别名与 --help 同形（同一份手册）
+	if so2, _, c2, _ := run("-h"); c2 != 0 || strings.TrimSpace(so2) == "" {
+		add("cli.help.alias", "-h 等价 --help", check.Fail, fmt.Sprintf("rc=%d stdout=%d 字节", c2, len(so2)), "PLUGIN_CLI §3")
+	} else if so3, _, c3, _ := run("help"); c3 != 0 || strings.TrimSpace(so3) == "" {
+		add("cli.help.alias", "-h 等价 --help", check.Fail, fmt.Sprintf("help rc=%d stdout=%d 字节", c3, len(so3)), "PLUGIN_CLI §3")
+	} else {
+		add("cli.help.alias", "-h / help 等价 --help", check.Pass, "两种写法均走 stdout", "PLUGIN_CLI §3")
+	}
+
+	// ③ 四个必需子命令：手册存在即可（逐条软断言）
+	for _, c := range []struct{ id, cmd string }{{"cli.call", "call"}, {"cli.stdio", "stdio"}, {"cli.manifest", "manifest"}, {"cli.ping", "ping"}} {
+		so, _, code, err := run(c.cmd, "--help")
+		st, detail := check.Pass, "可用"
+		switch {
+		case err != nil && code == 0:
+			st, detail = check.Warn, "执行失败: "+err.Error()
+		case code != 0 || strings.TrimSpace(so) == "":
+			st, detail = check.Warn, fmt.Sprintf("该命令手册未走 stdout 或退出码非 0（rc=%d）", code)
+		default:
+			detail = fmt.Sprintf("手册 %d 字节走 stdout", len(so))
+		}
+		add(c.id, "子命令 "+c.cmd+" 存在", st, detail, "PLUGIN_CLI §2")
+	}
+
+	// ④ 逐命令手册：只对顶层手册里出现的命令断言（硬）
+	// 「命令：」段的行首有两种形态（` * call  说明` 缺省命令带星号、`   accounts  说明` 三个空格），
+	// 按缩进判段落会在第一行就 break（实测 kilo 因此误报「顶层手册未列出自定义命令」），改用正则扫行。
+	customs := customCommands(so)
+	if len(customs) == 0 {
+		add("cli.help.cmd", "逐命令 --help", check.Warn, "顶层手册未列出自定义命令", "PLUGIN_CLI §9")
+	} else {
+		bad := []string{}
+		for _, cmd := range customs[:min(8, len(customs))] { // 命令数上限保护：每个一次 spawn
+			if so, _, code, _ := run(cmd, "--help"); code != 0 || strings.TrimSpace(so) == "" {
+				bad = append(bad, fmt.Sprintf("%s(rc=%d,stdout=%dB)", cmd, code, len(so)))
+			}
+		}
+		if len(bad) > 0 {
+			add("cli.help.cmd", "逐命令 --help", check.Fail, "手册缺失或 rc≠0: "+strings.Join(bad, " "), "PLUGIN_CLI §9")
+		} else {
+			add("cli.help.cmd", "逐命令 --help", check.Pass, fmt.Sprintf("抽查 %d/%d 个自定义命令均有手册", min(8, len(customs)), len(customs)), "PLUGIN_CLI §9")
+		}
+	}
+
+	// ⑤ --version 必须可用（W3-57 D4：以前只有 gateway/core 有，插件一律报未知开关）
+	if so, _, code, _ := run("--version"); code != 0 || strings.TrimSpace(so) == "" {
+		add("cli.version", "--version 自报身份", check.Fail, fmt.Sprintf("rc=%d stdout=%d 字节", code, len(so)), "PLUGIN_CLI §3")
+	} else {
+		add("cli.version", "--version 自报身份", check.Pass, strings.TrimSpace(so), "PLUGIN_CLI §3")
+	}
+
+	// ⑥ 非法命令必须非 0 退出码（约定 2 = usage_error）
+	if _, _, code, _ := run("no-such-command-xyz"); code == 0 {
+		add("cli.usage", "非法命令退码", check.Fail, "未知命令竟 rc=0", "PLUGIN_CLI §9")
+	} else if code != 2 {
+		add("cli.usage", "非法命令退码", check.Warn, fmt.Sprintf("rc=%d，约定用法错误为 2", code), "PLUGIN_CLI §9")
+	} else {
+		add("cli.usage", "非法命令退码", check.Pass, "rc=2", "PLUGIN_CLI §9")
 	}
 
 	// `call` / `stdio` 只接受 --data：多余开关必须报错
-	out, errb, code, _ := env.RunCmd(ctx, []string{"call", "--model", "x"}, []byte("{}"), 15*time.Second)
+	_, _, code, _ = run("call", "--model", "x")
 	if code == 0 {
-		rep.Add(check.Assertion{Level: check.LevelContract, ID: "cli.call-flags", Name: "call 只认 --data",
-			Status: check.Warn, Detail: "call 接受了非契约开关 --model（应报错）",
-			Contract: "PLUGIN_CLI §3"})
+		add("cli.call-flags", "call 只认 --data", check.Warn, "call 接受了非契约开关 --model（应报错）", "PLUGIN_CLI §3")
 	} else {
-		_ = out
-		_ = errb
-		rep.Add(check.Assertion{Level: check.LevelContract, ID: "cli.call-flags", Name: "call 只认 --data",
-			Status: check.Pass, Detail: "非法开关被拒绝", Contract: "PLUGIN_CLI §3"})
+		add("cli.call-flags", "call 只认 --data", check.Pass, "非法开关被拒绝", "PLUGIN_CLI §3")
 	}
+}
+
+// contractCmds 是契约必需的四个子命令（PLUGIN_CLI §2），扫顶层手册时要排除。
+var contractCmds = []string{"call", "stdio", "manifest", "ping"}
+
+// cmdRowRe 匹配顶层手册「命令：」段的每一行（行首可选缩进 + 可选 `*` 缺省标记）。
+var cmdRowRe = regexp.MustCompile(`(?m)^[ \t]*[*]?[ \t]+([a-z][a-z0-9_-]{1,20})[ \t]+\S`)
+
+// customCommands 从顶层手册取自定义命令名（剔除四条契约命令，保持出现顺序）。
+func customCommands(manual string) []string {
+	i := strings.Index(manual, "命令：")
+	if i < 0 {
+		return nil
+	}
+	rest := manual[i+len("命令："):]
+	if j := strings.Index(rest, "\n\n"); j > 0 {
+		rest = rest[:j] // 命令段以空行结束
+	}
+	out := []string{}
+	for _, m := range cmdRowRe.FindAllStringSubmatch(rest, -1) {
+		if !hasStr(contractCmds, m[1]) {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
+func hasStr(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // callPing 用 call 形态跑 ping，验证一次性进程形态可用。

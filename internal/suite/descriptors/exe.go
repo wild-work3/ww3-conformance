@@ -43,7 +43,18 @@ func joinPath(parts ...string) string { return filepath.Join(parts...) }
 //  3. 目录扫描：词干等于 id / `<id>-ext` / `<id>-hook` / `<id>-cli` 的第一个可执行文件
 //
 // 都找不到时返回第 1 步的路径（让上层报「文件不存在」并写清期望位置）。
+//
+// W3-58：安装根布局是 `dist/plugins/<id>@<kind>/`（单版本、无 manifest.json），
+// 因此先扫插件目录树，再回退到「平铺在 --dist 根」的老布局（便于单独跑产物目录）。
 func presetExe(distDir, id string) string {
+	if p := exeInPluginTree(distDir, id); p != "" {
+		return p
+	}
+	// -cli 型预设的 ID（chatglm-cli）与插件 ID（glm）不同，插件树里按目录名找不到，
+	// 直接扫 `dist/plugins/*@channel/` 里词干匹配的文件。
+	if p := exeInPluginTreeByStem(distDir, id); p != "" {
+		return p
+	}
 	cands := presetExeCands(distDir, id)
 	for _, p := range cands {
 		if st, err := os.Stat(p); err == nil && !st.IsDir() {
@@ -83,6 +94,93 @@ func presetExeCands(distDir, id string) []string {
 		out = append(out, filepath.Join(distDir, withExt(n)))
 	}
 	return out
+}
+
+// exeInPluginTree 在 `dist/plugins/<id>@<kind>/` 里找入口（W3-58 安装布局）。
+func exeInPluginTree(distDir, id string) string {
+	ents, err := os.ReadDir(joinPath(distDir, "plugins"))
+	if err != nil {
+		return ""
+	}
+	for _, e := range ents {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if base, _, ok := strings.Cut(name, "@"); !ok || base != id {
+			continue
+		}
+		dir := joinPath(distDir, "plugins", name)
+		// 有 entry.json（多文件/解释器插件）时无法只看文件名，交由 --exe 或 conformance.json 指定
+		if _, err := os.Stat(joinPath(dir, "entry.json")); err == nil {
+			return ""
+		}
+		if p := firstExeIn(dir); p != "" {
+			return p
+		}
+	}
+	return ""
+}
+
+// exeInPluginTreeByStem 按「产物词干」在插件树里找（预设 ID 可能是仓名而非插件 ID，如 chatglm-cli）。
+func exeInPluginTreeByStem(distDir, id string) string {
+	ents, err := os.ReadDir(joinPath(distDir, "plugins"))
+	if err != nil {
+		return ""
+	}
+	stems := []string{id, id + "-ext", id + "-hook"}
+	for _, e := range ents {
+		if !e.IsDir() {
+			continue
+		}
+		dir := joinPath(distDir, "plugins", e.Name())
+		if _, err := os.Stat(joinPath(dir, "entry.json")); err == nil {
+			continue
+		}
+		p := firstExeIn(dir)
+		if p == "" {
+			continue
+		}
+		stem := strings.TrimSuffix(filepath.Base(p), filepath.Ext(p))
+		for _, want := range stems {
+			if stem == want {
+				return p
+			}
+		}
+	}
+	return ""
+}
+
+// firstExeIn 返回目录根下唯一/首个可执行文件（跳过 entry.json、*.bak.zip 等非入口文件）。
+func firstExeIn(dir string) string {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var cands []string
+	for _, e := range ents {
+		if e.IsDir() {
+			continue
+		}
+		n := e.Name()
+		if strings.HasSuffix(strings.ToLower(n), ".json") || strings.HasSuffix(strings.ToLower(n), ".zip") {
+			continue
+		}
+		if runtime.GOOS == "windows" {
+			switch strings.ToLower(filepath.Ext(n)) {
+			case ".exe", ".cmd", ".bat":
+				cands = append(cands, n)
+			}
+			continue
+		}
+		if filepath.Ext(n) == "" || strings.HasSuffix(n, ".sh") {
+			cands = append(cands, n)
+		}
+	}
+	if len(cands) == 0 {
+		return ""
+	}
+	return joinPath(dir, cands[0])
 }
 
 func exeSuffix() string {

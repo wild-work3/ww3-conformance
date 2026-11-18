@@ -10,7 +10,9 @@
 package descriptors
 
 import (
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/wild-work3/ww3-conformance/internal/suite"
 )
@@ -28,7 +30,15 @@ func All(distDir, liveAuthDir string) []suite.Descriptor {
 		d, err := suite.LoadPreset(n, "", nil)
 		if err == nil {
 			if d.Exe != "" {
-				d.Exe = suite.DescribeExe(d.Exe, distDir)
+				// W3-58：预设里写的 exe 名（如 "chatglm-cli"）在安装布局下位于
+				// `dist/plugins/<id>@<kind>/`，先按插件树定位，找不到再退回平铺老布局。
+				if p := exeInPluginTree(distDir, n); p != "" {
+					d.Exe = p
+				} else if p := exeInPluginTreeByStem(distDir, strings.TrimSuffix(d.Exe, filepath.Ext(d.Exe))); p != "" {
+					d.Exe = p
+				} else {
+					d.Exe = suite.DescribeExe(d.Exe, distDir)
+				}
 			} else {
 				d.Exe = presetExe(distDir, n)
 			}
